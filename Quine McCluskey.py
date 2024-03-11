@@ -1,25 +1,60 @@
 # Quine McCluskey algorithm for minimizing logical expressions
 # Author: Suman Adhikari
 
-def mul(x,y): # Multiply 2 minterms
-    res = []
-    for i in x:
-        if i+"'" in y or (len(i)==2 and i[0] in y):
-            return []
-        else:
-            res.append(i)
-    for i in y:
-        if i not in res:
-            res.append(i)
-    return res
-
-def multiply(x,y): # Multiply 2 expressions
-    res = []
-    for i in x:
-        for j in y:
-            tmp = mul(i,j)
-            res.append(tmp) if len(tmp) != 0 else None
-    return res
+class Petrick: # Petrick's method
+    # (1) __substitution()
+    # When the values are the same, treat them as new variables
+    # For example, [[['A', 'B'], ['C', 'D']], [['A', 'B'], ['E', 'F']]] are treated as [['A', 'B'], ['A', 'C']]
+    # (2) __distribute() in __petrick()
+    # Convert to SOP form using the distributive law
+    # For example, [['A', 'B'], ['A', 'C']] is converted to ['A', 'AC', 'BA', 'BC']
+    # (3) __petrick()
+    # Select the smallest of all generated patterns
+    # (4) __back_substitution()
+    # Convert the result to the original variable
+    def __init__(self, P):
+        self.allocated = {}
+        self.P = P
+        
+    def get(self):
+        self.P = self.__substitution(self.P)
+        self.P = self.__petrick(self.P)
+        self.P = self.__back_substitution(self.P)
+        return self.P
+    
+    def __petrick(self, P):
+        while len(P) > 1:
+            P[0] = self.__distribute(P[0], P[1])
+            del P[1]
+        all_patterns = sorted(list(tuple(["".join(sorted(s)) for s in P[0]])), key=len)
+        min_length = len(all_patterns[0])
+        return [s for s in all_patterns if len(s) == min_length]
+    
+    def __distribute(self, A, B):
+        result = []
+        for i in range(len(A)):
+            for j in range(len(B)):
+                if B[j] in A[i]:
+                    result.append(A[i])
+                else:
+                    result.append(f"{A[i]}{B[j]}")
+        return result
+    
+    def __substitution(self, P):
+        for i in range(len(P)):
+            for j in range(len(P[i])):
+                t = "".join(P[i][j])
+                if t not in self.allocated:
+                    self.allocated[chr(65 + len(self.allocated))] = t
+                P[i][j] = [k for k, v in self.allocated.items() if v == t][0]
+        return P
+    
+    def __back_substitution(self, P):
+        new_P = [[0 for _ in range(len(P[i]))] for i in range(len(P))]
+        for i in range(len(P)):
+            for j in range(len(P[i])):
+                new_P[i][j] = self.allocated[P[i][j]]
+        return new_P
 
 def refine(my_list,dc_list): # Removes don't care terms from a given list and returns refined list
     res = []
@@ -170,13 +205,12 @@ removeTerms(chart,EPI) # Remove EPI related columns from chart
 
 if(len(chart) == 0): # If no minterms remain after removing EPI related columns
     final_result = [findVariables(i) for i in EPI] # Final result with only EPIs
+    print(f"Solution: F = {' + '.join(''.join(i) for i in final_result)}")
 else: # Else follow Petrick's method for further simplification
     P = [[findVariables(j) for j in chart[i]] for i in chart]
-    while len(P)>1: # Keep multiplying until we get the SOP form of P
-        P[1] = multiply(P[0],P[1])
-        P.pop(0)
-    final_result = [min(P[0],key=len)] # Choosing the term with minimum variables from P
-    final_result.extend(findVariables(i) for i in EPI) # Adding the EPIs to final solution
-print('\n\nSolution: F = '+' + '.join(''.join(i) for i in final_result))
+    final_results = Petrick(P).get()
+    for i, final_result in enumerate(final_results):
+        final_result.extend(findVariables(i) for i in EPI) # Adding the EPIs to final solution
+        print(f"Solution: F{i + 1} = {' + '.join(''.join(i) for i in final_result)}")
 
 input("\nPress enter to exit...")
